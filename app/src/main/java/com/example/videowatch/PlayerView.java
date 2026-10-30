@@ -6,6 +6,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Handler;
@@ -23,6 +24,7 @@ public class PlayerView extends FrameLayout {
     private final VideoView videoView;
     private final ControlView controls;
     private final Handler handler = new Handler();
+    private final AudioManager audioManager;
 
     private boolean prepared;
     private boolean playing;
@@ -54,6 +56,7 @@ public class PlayerView extends FrameLayout {
     public PlayerView(Context context) {
         super(context);
         setBackgroundColor(0xFF000000);
+        audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
 
         videoView = new VideoView(context);
         FrameLayout.LayoutParams vlp = new FrameLayout.LayoutParams(
@@ -190,6 +193,36 @@ public class PlayerView extends FrameLayout {
         }
     }
 
+    int getVolume() {
+        try {
+            return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    int getMaxVolume() {
+        try {
+            return Math.max(1, audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+        } catch (Throwable t) {
+            return 1;
+        }
+    }
+
+    void setVolume(int v) {
+        try {
+            int max = getMaxVolume();
+            if (v < 0) {
+                v = 0;
+            }
+            if (v > max) {
+                v = max;
+            }
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0);
+        } catch (Throwable t) {
+        }
+    }
+
     private static String fmt(int ms) {
         if (ms < 0) {
             ms = 0;
@@ -211,6 +244,8 @@ public class PlayerView extends FrameLayout {
         private final Path tri = new Path();
         private final RectF rect = new RectF();
         private boolean dragging;
+        private boolean draggingVol;
+        private int lastVol = -1;
         private float downX, downY;
 
         ControlView(Context c) {
@@ -234,12 +269,40 @@ public class PlayerView extends FrameLayout {
             if (!controlsVisible) {
                 return;
             }
-            float barTop = h - 62;
+            float barTop = h - 88;
             p.setColor(0xCC05070C);
             c.drawRect(0, barTop, w, h, p);
 
-            float bx = 28;
-            float by = h - 31;
+            float volY = h - 74;
+            p.setColor(getVolume() > 0 ? 0xFFCCD3E8 : 0xFF6C7392);
+            c.drawRect(14, volY - 4, 19, volY + 4, p);
+            tri.reset();
+            tri.moveTo(19, volY - 4);
+            tri.lineTo(26, volY - 9);
+            tri.lineTo(26, volY + 9);
+            tri.lineTo(19, volY + 4);
+            tri.close();
+            c.drawPath(tri, p);
+
+            float vsx = 38;
+            float vsw = w - vsx - 120;
+            p.setColor(0x33FFFFFF);
+            rect.set(vsx, volY - 2, vsx + vsw, volY + 2);
+            c.drawRoundRect(rect, 2, 2, p);
+            float vk = getVolume() / (float) getMaxVolume();
+            p.setColor(0xFF2EE6C8);
+            rect.set(vsx, volY - 2, vsx + vsw * vk, volY + 2);
+            c.drawRoundRect(rect, 2, 2, p);
+            p.setColor(0xFFFFFFFF);
+            c.drawCircle(vsx + vsw * vk, volY, 4, p);
+
+            pt.setTextAlign(Paint.Align.RIGHT);
+            pt.setTextSize(9);
+            pt.setColor(0xFFCCD3E8);
+            c.drawText(fmt(position()) + "/" + fmt(duration), w - 30, volY + 3, pt);
+
+            float bx = 72;
+            float by = h - 40;
             p.setColor(0xFF2EE6C8);
             c.drawCircle(bx, by, 15, p);
             p.setColor(0xFF05070C);
@@ -255,8 +318,8 @@ public class PlayerView extends FrameLayout {
                 c.drawPath(tri, p);
             }
 
-            float sx = 52;
-            float sw = w - sx - 78;
+            float sx = 96;
+            float sw = w - sx - 96;
             float sy = by;
             p.setColor(0x44FFFFFF);
             rect.set(sx, sy - 3, sx + sw, sy + 3);
@@ -267,11 +330,6 @@ public class PlayerView extends FrameLayout {
             c.drawRoundRect(rect, 3, 3, p);
             p.setColor(0xFFFFFFFF);
             c.drawCircle(sx + sw * prog, sy, 5, p);
-
-            pt.setTextAlign(Paint.Align.RIGHT);
-            pt.setTextSize(10);
-            pt.setColor(0xFFCCD3E8);
-            c.drawText(fmt(position()) + " / " + fmt(duration), w - 8, sy + 4, pt);
         }
 
         @Override
@@ -284,12 +342,27 @@ public class PlayerView extends FrameLayout {
                 case MotionEvent.ACTION_DOWN:
                     downX = x;
                     downY = y;
-                    if (controlsVisible && y > h - 62) {
-                        if (x < 48) {
+                    if (controlsVisible && y > h - 88) {
+                        if (y <= h - 62) {
+                            if (x <= 34) {
+                                if (getVolume() > 0) {
+                                    lastVol = getVolume();
+                                    setVolume(0);
+                                } else {
+                                    setVolume(lastVol > 0 ? lastVol : getMaxVolume() / 2);
+                                }
+                                invalidate();
+                                return true;
+                            }
+                            draggingVol = true;
+                            doVolume(x);
+                            return true;
+                        }
+                        if (x < 96) {
                             togglePlay();
                             return true;
                         }
-                        if (x < w - 74) {
+                        if (x < w - 96) {
                             dragging = true;
                             doSeek(x);
                             return true;
@@ -298,18 +371,23 @@ public class PlayerView extends FrameLayout {
                     }
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    if (dragging) {
+                    if (draggingVol) {
+                        doVolume(x);
+                    } else if (dragging) {
                         doSeek(x);
                     }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if (dragging) {
+                    if (draggingVol) {
+                        draggingVol = false;
+                        scheduleHide();
+                    } else if (dragging) {
                         dragging = false;
                         scheduleHide();
                     } else if (Math.abs(x - downX) < 12 && Math.abs(y - downY) < 12) {
                         if (!controlsVisible) {
                             showControls();
-                        } else if (y < h - 62) {
+                        } else if (y < h - 88) {
                             toggleControls();
                         }
                     }
@@ -319,10 +397,25 @@ public class PlayerView extends FrameLayout {
             }
         }
 
+        private void doVolume(float x) {
+            int w = getWidth();
+            float vsx = 38;
+            float vsw = w - vsx - 120;
+            float k = (x - vsx) / vsw;
+            if (k < 0) {
+                k = 0;
+            }
+            if (k > 1) {
+                k = 1;
+            }
+            setVolume(Math.round(k * getMaxVolume()));
+            invalidate();
+        }
+
         private void doSeek(float x) {
             int w = getWidth();
-            float sx = 52;
-            float sw = w - sx - 78;
+            float sx = 96;
+            float sw = w - sx - 96;
             float k = (x - sx) / sw;
             if (k < 0) {
                 k = 0;
