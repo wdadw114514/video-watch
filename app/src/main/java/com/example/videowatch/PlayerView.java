@@ -7,14 +7,15 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Handler;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 import android.widget.VideoView;
 
+import java.io.File;
 import java.util.Locale;
 
 public class PlayerView extends FrameLayout {
@@ -27,6 +28,8 @@ public class PlayerView extends FrameLayout {
     private boolean playing;
     private int duration;
     private boolean controlsVisible = true;
+    private String errorMsg;
+    private String title = "";
 
     private final Runnable ticker = new Runnable() {
         @Override
@@ -53,7 +56,6 @@ public class PlayerView extends FrameLayout {
         setBackgroundColor(0xFF000000);
 
         videoView = new VideoView(context);
-        videoView.setBackgroundColor(0xFF000000);
         FrameLayout.LayoutParams vlp = new FrameLayout.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
         vlp.gravity = Gravity.CENTER;
@@ -65,11 +67,18 @@ public class PlayerView extends FrameLayout {
     }
 
     public void play(String path) {
+        File f = new File(path);
+        play(Uri.fromFile(f), f.getName());
+    }
+
+    public void play(Uri uri, String name) {
         handler.removeCallbacksAndMessages(null);
         prepared = false;
         playing = false;
         duration = 0;
         controlsVisible = true;
+        errorMsg = null;
+        title = name == null ? "视频" : name;
         controls.invalidate();
 
         videoView.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
@@ -96,15 +105,16 @@ public class PlayerView extends FrameLayout {
         videoView.setOnErrorListener(new MediaPlayer.OnErrorListener() {
             @Override
             public boolean onError(MediaPlayer mp, int what, int extra) {
-                Toast.makeText(getContext(), "无法播放该视频", Toast.LENGTH_SHORT).show();
+                errorMsg = "播放失败 (" + what + "," + extra + ")";
                 playing = false;
                 prepared = false;
                 controlsVisible = true;
+                handler.removeCallbacks(hideControls);
                 controls.invalidate();
                 return true;
             }
         });
-        videoView.setVideoPath(path);
+        videoView.setVideoURI(uri);
     }
 
     public void stop() {
@@ -210,11 +220,20 @@ public class PlayerView extends FrameLayout {
 
         @Override
         protected void onDraw(Canvas c) {
+            int w = getWidth();
+            int h = getHeight();
+            if (errorMsg != null) {
+                pt.setTextAlign(Paint.Align.CENTER);
+                pt.setTextSize(12);
+                pt.setColor(0xFFFF5A5F);
+                c.drawText(errorMsg, w / 2f, h / 2f - 8, pt);
+                pt.setTextSize(9);
+                pt.setColor(0xFF8B93B0);
+                c.drawText("返回换一个，或长按列表用系统播放器", w / 2f, h / 2f + 14, pt);
+            }
             if (!controlsVisible) {
                 return;
             }
-            int w = getWidth();
-            int h = getHeight();
             float barTop = h - 62;
             p.setColor(0xCC05070C);
             c.drawRect(0, barTop, w, h, p);

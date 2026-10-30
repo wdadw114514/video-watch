@@ -13,11 +13,31 @@
         <activity
             android:name=".MainActivity"
             android:screenOrientation="portrait"
+            android:launchMode="singleTop"
             android:configChanges="orientation|keyboardHidden|screenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="video/*" />
+                <data android:scheme="file" android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.mp4" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.mkv" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.avi" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.3gp" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.webm" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.mov" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.ts" />
+                <data android:scheme="file" android:host="*" android:pathPattern=".*\\.flv" />
             </intent-filter>
         </activity>
     </application>

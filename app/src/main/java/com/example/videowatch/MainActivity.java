@@ -1,7 +1,9 @@
 package com.example.videowatch;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.text.TextUtils;
@@ -60,6 +62,31 @@ public class MainActivity extends Activity {
         setContentView(root);
         hideSystemUi();
         scanVideos();
+        handleIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntent(intent);
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return;
+        }
+        Uri uri = intent.getData();
+        if (uri == null) {
+            return;
+        }
+        String name = uri.getLastPathSegment();
+        if (name == null || name.length() == 0) {
+            name = "视频";
+        }
+        listPage.setVisibility(View.GONE);
+        playerPage.setVisibility(View.VISIBLE);
+        playerPage.play(uri, name);
     }
 
     private LinearLayout buildListPage() {
